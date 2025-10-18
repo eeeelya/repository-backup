@@ -35,3 +35,10 @@ jobs:
 
           git tag -f -a "$VERSION" -m "Release $VERSION"
           git push origin "$VERSION"
+
+      - name: Update latest tag
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          
+          git tag -f -a "latest" -m "Latest release: $VERSION"
+          git push -f origin "latest"
