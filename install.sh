@@ -11,7 +11,7 @@ case "$ARCH" in
     *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
 esac
 
-LATEST=$(curl -s https://api.github.com/repos/$REPO/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+LATEST=$(curl -s https://api.github.com/repos/eeeelya/repository-backup/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 URL="https://github.com/eeeelya/repository-backup/releases/download/latest/${CLI_NAME}-${OS}-${ARCH}"
 
 echo "Installing $CLI_NAME version $LATEST for $OS/$ARCH..."
