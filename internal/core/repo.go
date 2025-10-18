@@ -1,16 +1,16 @@
 package core
 
 import (
-	// "archive/zip"
 	"archive/zip"
 	"fmt"
 	"io"
 	"path/filepath"
 
-	// "io"
 	"log/slog"
 	"os"
 	"strings"
+
+	"golang.org/x/term"
 
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/memfs"
@@ -30,13 +30,27 @@ func (r *Repo) GetRepoName() string {
 	return parts[len(parts)-1]
 }
 
+func getPassword() (string, error) {
+	fmt.Print("Enter SSH key password: ")
+
+	passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Println()
+
+	return string(passwordBytes), nil
+}
+
 func (r *Repo) getAuthMethod(sshKeyPath string) (transport.AuthMethod, error) {
 	if strings.HasPrefix(r.URL, "git@") || strings.HasPrefix(r.URL, "ssh://") {
 		slog.Debug("Using SSH authentication")
 
-		var password string
-		fmt.Print("Enter ssh key password: ")
-		fmt.Scan(&password)
+		password, err := getPassword()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get password: %w", err)
+		}
 
 		auth, err := ssh.NewPublicKeysFromFile("git", sshKeyPath, password)
 
@@ -48,6 +62,7 @@ func (r *Repo) getAuthMethod(sshKeyPath string) (transport.AuthMethod, error) {
 	}
 
 	slog.Debug("Using HTTPS (no authentication)")
+
 	return nil, nil
 }
 
