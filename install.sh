@@ -12,7 +12,7 @@ case "$ARCH" in
 esac
 
 LATEST=$(curl -s https://api.github.com/repos/eeeelya/repository-backup/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-URL="https://github.com/eeeelya/repository-backup/releases/download/latest/${CLI_NAME}-${OS}-${ARCH}"
+URL="https://github.com/eeeelya/repository-backup/releases/download/$LATEST/${CLI_NAME}-${OS}-${ARCH}"
 
 echo "Installing $CLI_NAME version $LATEST for $OS/$ARCH..."
 
