@@ -1,4 +1,4 @@
-name: Tag from VERSION file
+name: Tag and Release
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  tag:
+  tag-and-release:
     runs-on: ubuntu-latest
 
     steps:
@@ -42,3 +42,26 @@ jobs:
           
           git tag -fa "latest" -m "Latest release: $VERSION"
           git push -f origin "latest"
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Build binaries
+        run: |
+          mkdir -p dist
+          GOOS=linux GOARCH=amd64 go build -o dist/repobackup-linux-amd64 ./cmd/cli
+          GOOS=linux GOARCH=arm64 go build -o dist/repobackup-linux-arm64 ./cmd/cli
+          GOOS=darwin GOARCH=amd64 go build -o dist/repobackup-darwin-amd64 ./cmd/cli
+          GOOS=darwin GOARCH=arm64 go build -o dist/repobackup-darwin-arm64 ./cmd/cli
+          GOOS=windows GOARCH=amd64 go build -o dist/repobackup-windows-amd64.exe ./cmd/cli
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: Release ${{ steps.get_version.outputs.version }}
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
