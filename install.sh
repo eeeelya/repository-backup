@@ -22,4 +22,4 @@ chmod +x /tmp/$CLI_NAME
 sudo mv /tmp/$CLI_NAME /usr/local/bin/$CLI_NAME
 
 echo "$CLI_NAME installed successfully!"
-$CLI_NAME --version
+$CLI_NAME version
