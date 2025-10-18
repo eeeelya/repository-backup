@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-CLI_NAME="git-repository-backup"
+CLI_NAME="git-repository"
 
 OS=$(uname | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
