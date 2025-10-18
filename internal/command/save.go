@@ -1,7 +1,7 @@
 package command
 
 import (
-	"git/repository/backup/internal/core"
+	"github.com/eeeelya/repository-backup/internal/core"
 	"log/slog"
 	"os"
 

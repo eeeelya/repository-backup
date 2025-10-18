@@ -1,4 +1,4 @@
-module git/repository/backup
+module github.com/eeeelya/repository-backup
 
 go 1.24.1
 
