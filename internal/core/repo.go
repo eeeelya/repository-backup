@@ -2,13 +2,15 @@ package core
 
 import (
 	"archive/zip"
+	"bytes"
 	"fmt"
 	"io"
-	"path/filepath"
-
 	"log/slog"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
 	"golang.org/x/term"
 
@@ -66,6 +68,11 @@ func (r *Repo) getAuthMethod(sshKeyPath string) (transport.AuthMethod, error) {
 	return nil, nil
 }
 
+type fileJob struct {
+	path    string
+	content []byte
+}
+
 func (r *Repo) createZipArchive(fs billy.Filesystem, outputPath string) error {
 	zipFile, err := os.Create(outputPath)
 	if err != nil {
@@ -76,13 +83,105 @@ func (r *Repo) createZipArchive(fs billy.Filesystem, outputPath string) error {
 	zipWriter := zip.NewWriter(zipFile)
 	defer zipWriter.Close()
 
-	return r.walkFilesystem(fs, "/", zipWriter)
+	return r.createZipArchiveConcurrent(fs, zipWriter)
 }
 
-func (r *Repo) walkFilesystem(fs billy.Filesystem, path string, zipWriter *zip.Writer) error {
-	files, err := fs.ReadDir(path)
+func (r *Repo) createZipArchiveConcurrent(fs billy.Filesystem, zipWriter *zip.Writer) error {
+	filePaths, err := r.CollectFilePaths(fs, "/")
 	if err != nil {
 		return err
+	}
+
+	if len(filePaths) == 0 {
+		return nil
+	}
+
+	slog.Debug("Processing files", "count", len(filePaths), "workers", runtime.NumCPU())
+
+	jobs := make(chan string, len(filePaths))
+	results := make(chan fileJob, len(filePaths))
+	errors := make(chan error, 1)
+
+	numWorkers := min(runtime.NumCPU(), 8)
+
+	var wg sync.WaitGroup
+
+	for range numWorkers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for path := range jobs {
+				file, err := fs.Open(path)
+				if err != nil {
+					select {
+					case errors <- err:
+					default:
+					}
+					return
+				}
+				defer file.Close()
+
+				var buf bytes.Buffer
+				if _, err := io.Copy(&buf, file); err != nil {
+					select {
+					case errors <- err:
+					default:
+					}
+					return
+				}
+
+				results <- fileJob{
+					path:    path,
+					content: buf.Bytes(),
+				}
+			}
+		}()
+	}
+
+	go func() {
+		for _, path := range filePaths {
+			jobs <- path
+		}
+		close(jobs)
+	}()
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	for result := range results {
+		select {
+		case err := <-errors:
+			return err
+		default:
+		}
+
+		zipEntry, err := zipWriter.Create(strings.TrimPrefix(result.path, "/"))
+		if err != nil {
+			return err
+		}
+
+		if _, err := io.Copy(zipEntry, bytes.NewReader(result.content)); err != nil {
+			return err
+		}
+	}
+
+	select {
+	case err := <-errors:
+		return err
+	default:
+	}
+
+	return nil
+}
+
+func (r *Repo) CollectFilePaths(fs billy.Filesystem, path string) ([]string, error) {
+	var paths []string
+
+	files, err := fs.ReadDir(path)
+	if err != nil {
+		return nil, err
 	}
 
 	for _, file := range files {
@@ -93,28 +192,17 @@ func (r *Repo) walkFilesystem(fs billy.Filesystem, path string, zipWriter *zip.W
 		}
 
 		if file.IsDir() {
-			if err := r.walkFilesystem(fs, fullPath, zipWriter); err != nil {
-				return err
+			subPaths, err := r.CollectFilePaths(fs, fullPath)
+			if err != nil {
+				return nil, err
 			}
+			paths = append(paths, subPaths...)
 		} else {
-			zipEntry, err := zipWriter.Create(strings.TrimPrefix(fullPath, "/"))
-			if err != nil {
-				return err
-			}
-
-			fileContent, err := fs.Open(fullPath)
-			if err != nil {
-				return err
-			}
-			defer fileContent.Close()
-
-			if _, err := io.Copy(zipEntry, fileContent); err != nil {
-				return err
-			}
+			paths = append(paths, fullPath)
 		}
 	}
 
-	return nil
+	return paths, nil
 }
 
 func (r *Repo) Save(outputPath string, sshKeyPath string) error {
